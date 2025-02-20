@@ -1,0 +1,61 @@
+name: Deployment Development-Remote
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup PHP 8.1, extensions PHP and tools for Laravel v8.x.x
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1' # Laravel v8.x.x support version >= 7.3 and <= 8.1
+        extensions: bcmath, ctype, fileinfo, json, mbstring, openssl, pdo, tokenizer, xml, mysql
+        tools: composer:v2, phpunit
+
+    - name: Install Dependencies
+      run: composer install --no-progress --no-suggest --prefer-dist --optimize-autoloader
+
+    - name: Copy .env
+      run: cp .env.example .env
+
+    # Set the environment variables
+
+    - name: Generate Application Key
+      run: php artisan key:generate
+
+    - name: Run Migrations
+      run: php artisan migrate --force
+
+    - name: Run Seeders
+      run: php artisan db:seed
+
+    - name: Run Unit Tests and Functional Tests
+      run: php artisan test --parallel
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and push Docker image in DockerHub
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ./docker/staging/Dockerfile
+        push: true
+        tags: corentin35/kubequest:develop-${{ github.sha }}
+
+    - name: Replace image tag in deployment.yaml for Kubernetes
+      run: |
+        sed -i 's/\${TAG_VERSION}/'${{ github.sha }}'/g' k8s/staging/deployment.yaml
+
+    # Deployment chart HELM to Cluster K3s
