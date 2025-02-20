@@ -21,7 +21,7 @@ jobs:
         tools: composer:v2, phpunit
 
     - name: Install Dependencies
-      run: composer install --no-progress --no-suggest --prefer-dist --optimize-autoloader
+      run: composer install --no-progress --no-suggest --prefer-dist --no-interaction
 
     - name: Copy .env
       run: cp .env.example .env
